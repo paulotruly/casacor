@@ -1,0 +1,4 @@
+casacor/
+__pycache__/
+*.wav
+ffmpeg-8.1-essentials_build/

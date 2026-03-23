@@ -1,0 +1,5 @@
+sounddevice
+numpy
+spicy
+noisereduce
+openai-whisper

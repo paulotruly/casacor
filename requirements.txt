@@ -3,3 +3,6 @@ numpy
 spicy
 noisereduce
 openai-whisper
+transformers
+torch
+safetensors

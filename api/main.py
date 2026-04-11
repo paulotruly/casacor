@@ -34,7 +34,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.post("/auth/register", response_model=Token)
+@app.post("/auth/register")
 def register(user: UserCreate):
     if user.email in users_db:
         raise HTTPException(
@@ -46,7 +46,8 @@ def register(user: UserCreate):
         "email": user.email,
         "hashed_password": get_password_hash(user.password)
     }
-    return {"message": "Usuário registrado com sucesso!"}
+    
+    return {"message": "Usuário registrado!"}
 
 @app.post("/auth/login", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends()):

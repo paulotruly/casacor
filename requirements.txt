@@ -9,7 +9,10 @@ safetensors
 fastapi
 uvicorn[standard]
 python-jose[cryptography]
-passlib[bcrypt]
+passlib
+argon2-cffi
 python-multipart
 pydantic
 pydantic-settings
+email-validator
+soundfile

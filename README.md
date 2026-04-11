@@ -25,6 +25,7 @@ Este projeto visa criar um sistema inteligente que:
 | **Python** | Linguagem principal da API |
 | **FastAPI** | Backend REST API |
 | **JWT** | Autenticação (access + refresh tokens) |
+| **Argon2** | Hash de senhas |
 | **PyTorch** | Modelo de deep learning |
 | **Transformers (HuggingFace)** | Classificação de áudio (AST) |
 | **LIFX API** | Controle da lâmpada smart |
@@ -53,8 +54,8 @@ CASACOR/
 ### Autenticação
 | Método | Endpoint | Descrição |
 |--------|----------|-----------|
-| POST | `/auth/register` | Cadastrar usuário |
-| POST | `/auth/login` | Fazer login |
+| POST | `/auth/register` | Cadastrar usuário (sem token) |
+| POST | `/auth/login` | Fazer login (retorna tokens) |
 | POST | `/auth/refresh` | Renovar access token |
 
 ### Classificação
@@ -147,17 +148,21 @@ O modelo **Audio Spectrogram Transformer (AST)** foi desenvolvido pelo MIT e tre
 
 ### JWT Tokens
 
-- **Access Token**: Dura 15 minutos
-- **Refresh Token**: Dura 7 dias
+- **Access Token**: Dura 15 minutos (identifica o usuário)
+- **Refresh Token**: Dura 7 dias (para renovar o access token)
 
-### Fluxo:
+### Fluxo de autenticação:
 
 ```
-1. POST /auth/register → Recebe tokens
-2. POST /auth/login → Recebe tokens
+1. POST /auth/register → Cadastra usuário (sem token)
+2. POST /auth/login → Cadastra e retorna tokens
 3. Usa access_token no header: Authorization: Bearer <token>
-4. Quando expira → POST /auth/refresh
+4. Quando access expira → POST /auth/refresh
 ```
+
+### Segurança das senhas:
+
+As senhas são hasheadas com **Argon2**, um algoritmo moderno e seguro.
 
 ## Configuração LIFX
 

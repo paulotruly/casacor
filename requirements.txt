@@ -6,3 +6,10 @@ openai-whisper
 transformers
 torch
 safetensors
+fastapi
+uvicorn[standard]
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+pydantic
+pydantic-settings

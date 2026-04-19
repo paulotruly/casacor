@@ -1,6 +1,6 @@
 -- criar banco (se não existir)
-CREATE DATABASE IF NOT EXISTS sonora_db;
-USE sonora_db;
+CREATE DATABASE IF NOT EXISTS sonora_bench;
+USE sonora_bench;
 
 -- tabela de usuários
 CREATE TABLE IF NOT EXISTS users (

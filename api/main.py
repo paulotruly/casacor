@@ -1,23 +1,30 @@
+"""
+main.py - Rotas da API SONORA
+"""
+
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.orm import Session
 
 from models import (
     UserCreate, UserLogin, Token, TokenRefresh,
     ClassifyRequest, ClassifyResponse,
     ColorConfig, ColorConfigUpdate,
-    LampStatus, LampColor, LampPower
+    LampStatus, LampColor, LampPower,
+    UserClassificationIn, UserClassificationOut, UserClassificationUpdate
 )
 
 from auth import (
-    users_db, get_password_hash, verify_password,
+    get_password_hash, verify_password,
     create_access_token, create_refresh_token, verify_token,
-    get_current_user
+    get_current_user, get_db, get_user_by_email, create_user, User
 )
 
 import config as color_config
 import classify as audio_classifier
 import lifx_client
+
 
 app = FastAPI(
     title="SONORA API",
@@ -34,48 +41,68 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ============================================================
+# ROTAS DE AUTENTICAÇÃO
+# ============================================================
+
 @app.post("/auth/register")
-def register(user: UserCreate):
-    if user.email in users_db:
+def register(user: UserCreate, db: Session = Depends(get_db)):
+    """
+    rota para registrar um novo usuário
+    """
+    # verifica se o email já existe
+    db_user = get_user_by_email(db, user.email)
+    if db_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email já cadastrado"
         )
     
-    users_db[user.email] = {
-        "email": user.email,
-        "hashed_password": get_password_hash(user.password)
-    }
-    
+    # cria o usuário no banco
+    hashed = get_password_hash(user.password)
+    create_user(db, user.email, hashed)
+
+    # pega o usuário criado pra pegar o id e cria as classes padrão
+    db_user = get_user_by_email(db, user.email)
+    color_config.initialize_user_classes(db, db_user.id)
     return {"message": "Usuário registrado!"}
 
 @app.post("/auth/login", response_model=Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends()):
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    """
+    rota para fazer login e obter tokens JWT
+    """
     user_email = form_data.username
     password = form_data.password
     
-    if user_email not in users_db:
+    # busca o usuário no banco
+    user = get_user_by_email(db, user_email)
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email ou senha incorretos"
+            detail="Credenciais inválidas"
         )
     
-    user = users_db[user_email]
-    if not verify_password(password, user["hashed_password"]):
+    # verifica a senha
+    if not verify_password(password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email ou senha incorretos"
+            detail="Credenciais inválidas"
         )
     
+    # cria os tokens
     access_token = create_access_token(data={"sub": user_email})
     refresh_token = create_refresh_token(data={"sub": user_email})
     
     return Token(access_token=access_token, refresh_token=refresh_token)
 
-# esse endpoint é para o usuário obter um novo token de acesso usando o token de atualização, sem precisar fazer login novamente
+
 @app.post("/auth/refresh", response_model=Token)
 def refresh_token(token_data: TokenRefresh):
-    # verifica se o refresh é válido e não expirou
+    """
+    rota para obter um novo token de acesso usando o token de refresh
+    """
     payload = verify_token(token_data.refresh_token, "refresh")
     
     if payload is None:
@@ -84,24 +111,44 @@ def refresh_token(token_data: TokenRefresh):
             detail="Refresh token inválido ou expirado"
         )
     
-    # caso seja válido, ele gera um novo token de acesso e um novo token de atualização,
-    # e retorna para o usuário, usando o email do payload para identificar o usuário
     email = payload.get("sub")
     new_access_token = create_access_token(data={"sub": email})
     new_refresh_token = create_refresh_token(data={"sub": email})
+    
     return Token(access_token=new_access_token, refresh_token=new_refresh_token)
 
+# ============================================================
+# ROTAS DE CLASSIFICAÇÃO DE ÁUDIO
+# ============================================================
+
 @app.post("/classify", response_model=ClassifyResponse)
-def classify_audio_endpoint(request: ClassifyRequest, current_user: dict = Depends(get_current_user)):
-    resultado = audio_classifier.classify_audio(request.audio)
+def classify_audio_endpoint(
+    request: ClassifyRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    rota para classificar áudio e alterar a cor da lâmpada
+    """
+    user_id = current_user["id"]
+    classes_ativas = color_config.get_user_active_classes(db, user_id)
+    resultado = audio_classifier.classify_audio(request.audio, classes_ativas)
     
     classe_detectada = resultado["detected_class"]
     confianca = resultado["confidence"]
     classes_secundarias = resultado["secondary_classes"]
     
-    cor_info = color_config.get_color_for_class(classe_detectada)
+    # obtém a cor configurada para ESSE usuário
+    cor_info = color_config.get_user_color_for_class(db, user_id, classe_detectada)
+
+    # se o usuário não tiver configurado essa classe, usa branco
+    if cor_info is None:
+        cor_info = {"name": "Branco", "hex": "#FFFFFF"}
+
     cor_nome = cor_info["name"]
     cor_hex = cor_info["hex"]
+    
+    # envia o comando para a lâmpada
     lifx_client.set_color(cor_hex, brightness=0.75)
     
     return ClassifyResponse(
@@ -112,93 +159,177 @@ def classify_audio_endpoint(request: ClassifyRequest, current_user: dict = Depen
         color_hex=cor_hex
     )
 
-# por que o current_user is not accessed? 
-# por que o Depends(get_current_user)?
 
-# aqui ele retorna uma lista de dicionários com a classe e a cor configurada
-@app.get("/config/colors", response_model=list[ColorConfig])
-def get_all_colors(current_user: dict = Depends(get_current_user)):
-    colors = color_config.get_all_colors()
+# ============================================================
+# ROTAS DE CONFIGURAÇÃO DE CORES
+# ============================================================
+
+@app.get("/config/user/classes", response_model=list[UserClassificationOut])
+def get_user_active_classes(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """lista todas as classes ativas do usuário logado"""
+    user_id = current_user["id"]
+    configs = color_config.get_user_classifications(db, user_id)
+    
+    # filtra só as ativas
+    ativas = [c for c in configs if c.is_active]
     
     return [
-        ColorConfig(class_name=classe, **info)
-        for classe, info in colors.items()
+        UserClassificationOut(
+            class_name=c.class_name,
+            color_name=c.color_name,
+            color_hex=c.color_hex,
+            is_active=c.is_active
+        )
+        for c in ativas
     ]
 
-# aqui ele retorna a cor configurada para uma classe específica, ou branco se a classe não tiver configuração
-@app.get("/config/colors/{class_name}", response_model=ColorConfig)
-def get_color_for_class(class_name: str, current_user: dict = Depends(get_current_user)):
-    cor_info = color_config.get_color_for_class(class_name)
+@app.get("/config/user/classes/all", response_model=list[UserClassificationOut])
+def get_all_user_classes(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """lista todas as classes do usuário (ativas e inativas)"""
+    user_id = current_user["id"]
+    configs = color_config.get_user_classifications(db, user_id)
     
-    if class_name not in color_config.colors_config:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Classe '{class_name}' não encontrada. Use GET /config/colors para ver as disponíveis."
+    return [
+        UserClassificationOut(
+            class_name=c.class_name,
+            color_name=c.color_name,
+            color_hex=c.color_hex,
+            is_active=c.is_active
         )
+        for c in configs
+    ]
+
+@app.put("/config/user/classes/{class_name}")
+def update_user_class(
+    class_name: str,
+    update: UserClassificationUpdate,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """atualiza cor ou ativa/desativa uma classe"""
+    user_id = current_user["id"]
     
-    return ColorConfig(class_name=class_name, **cor_info)
-
-# por que o current_user is not accessed? 
-# por que o Depends(get_current_user)?
-
-@app.put("/config/colors/{class_name}")
-def update_color(class_name: str, update: ColorConfigUpdate, current_user: dict = Depends(get_current_user)):
-    # aqui ele chama a função update_color passando o nome da classe,
-    # o nome da cor e o código hexadecimal da cor, e a função retorna
-    # True se a atualização foi bem-sucedida, ou False se a classe não foi encontrada
-    sucesso = color_config.update_color(
-        class_name=class_name,
+    sucesso = color_config.update_user_classification(
+        db,
+        user_id,
+        class_name,
         color_name=update.color_name,
-        color_hex=update.color_hex
+        color_hex=update.color_hex,
+        is_active=update.is_active
     )
     
     if not sucesso:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=404,
             detail=f"Classe '{class_name}' não encontrada"
         )
     
-    return {"message": "Cor atualizada", "class_name": class_name, **update.dict()}
+    return {"message": "Classe atualizada", "class_name": class_name}
 
-@app.post("/config/colors")
-def add_color(
-    color: ColorConfig,
-    current_user: dict = Depends(get_current_user)
+@app.post("/config/user/classes", response_model=UserClassificationOut)
+def add_user_class(
+    classification: UserClassificationIn,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    # 'go to definition' pra entender o que ela faz
-    color_config.add_color_config(
-        class_name=color.class_name,
-        color_name=color.color_name,
-        color_hex=color.color_hex
+    """adiciona uma nova classe para o usuário"""
+    user_id = current_user["id"]
+    
+    # verifica se já existe
+    existente = color_config.get_user_color_for_class(
+        db, user_id, classification.class_name
+    )
+    if existente:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Classe '{classification.class_name}' já existe!"
+        )
+    
+    # cria a nova classificação
+    nova = color_config.create_user_classification(
+        db,
+        user_id,
+        classification.class_name,
+        classification.color_name,
+        classification.color_hex
     )
     
-    return {"message": "Cor adicionada", **color.dict()}
+    return UserClassificationOut(
+        class_name=nova.class_name,
+        color_name=nova.color_name,
+        color_hex=nova.color_hex,
+        is_active=nova.is_active
+    )
 
+@app.delete("/config/user/classes/{class_name}")
+def delete_user_class(
+    class_name: str,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """desativa uma classe do usuário"""
+    user_id = current_user["id"]
+    
+    sucesso = color_config.delete_user_classification(db, user_id, class_name)
+    
+    if not sucesso:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Classe '{class_name}' não encontrada"
+        )
+    
+    return {"message": "Classe removida", "class_name": class_name}
+
+# ============================================================
+# ROTAS DA LÂMPADA
+# ============================================================
 
 @app.get("/lamp/status", response_model=LampStatus)
 def get_lamp_status(current_user: dict = Depends(get_current_user)):
+    """
+    pbtém o status atual da lâmpada
+    """
     status = lifx_client.get_status()
     return LampStatus(**status)
+
 
 @app.post("/lamp/power")
 def set_lamp_power(
     power: LampPower,
     current_user: dict = Depends(get_current_user)
 ):
+    """
+    liga ou desliga a lâmpada
+    """
     resultado = lifx_client.set_power(power.power)
     return resultado
+
 
 @app.post("/lamp/color")
 def set_lamp_color(
     color: LampColor,
     current_user: dict = Depends(get_current_user)
 ):
+    """
+    define a cor e brilho da lâmpada
+    """
     resultado = lifx_client.set_color(color.color, color.brightness)
     return resultado
 
+
+# ============================================================
+# ROTAS GERAIS
+# ============================================================
+
 @app.get("/")
 def root():
-    """Rota inicial da API."""
+    """rota inicial da API"""
     return {
         "message": "SONORA API",
         "version": "1.0.0",
@@ -206,7 +337,8 @@ def root():
         "lifx_configured": lifx_client.is_configured()
     }
 
+
 @app.get("/health")
 def health_check():
-    """Verifica se a API está rodando."""
+    """verifica se a API está rodando"""
     return {"status": "ok"}

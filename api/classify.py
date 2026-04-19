@@ -86,7 +86,6 @@ def classify_audio(audio_base64: str) -> Dict:
         "all_classes": todas_classes  # Todas as classes (pode usar depois)
     }
 
-
 # essa função é uusada para mudar a taxa de amostragem do áudio, caso o áudio enviado tenha uma
 # taxa de amostragem diferente de 16000 Hz, que é a taxa de amostragem que o modelo AST foi treinado,
 # então ele pode confundir o modelo, e a função _resample usa a biblioteca librosa para fazer essa

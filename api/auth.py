@@ -1,65 +1,170 @@
+"""
+auth.py - Gerencia autenticação de usuários e conexão com o banco de dados
+"""
+
 from datetime import datetime, timedelta
-from typing import Optional 
+from typing import Optional
+
+# JWT e senhas
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+
+# FastAPI
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-import os
 
+# SQLAlchemy (banco de dados)
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Boolean
+from sqlalchemy.orm import sessionmaker, declarative_base, Session
+
+# Variáveis de ambiente
+import os
 from dotenv import load_dotenv
 load_dotenv()
 
-# chave para assinatura dos tokens
+# ============================================================
+# CONFIGURAÇÕES DO BANCO DE DADOS
+# ============================================================
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+# cria a engine (conexão) com o banco - não abre ainda, só prepara
+engine = create_engine(DATABASE_URL)
+# cria a fábrica de sessões para fazer queries no banco
+SessionLocal = sessionmaker(autocommit=False, bind=engine)
+# base para criar os modelos (tabelas) do banco
+Base = declarative_base()
+
+# ============================================================
+# MODELO DA TABELA
+# ============================================================
+
+class User(Base):
+    __tablename__ = "users"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class UserClassification(Base):
+    __tablename__ = "user_classifications"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    class_name = Column(String(255), nullable=False)
+    color_name = Column(String(50), nullable=False)
+    color_hex = Column(String(7), nullable=False)
+    is_active = Column(Boolean, default=True)
+
+# ============================================================
+# FUNÇÕES DE BANCO DE DADOS
+# ============================================================
+
+def get_db():
+    """
+    dependency do FastAPI para obter uma sessão do banco
+    cria a sessão -> entrega para a rota -> fecha automaticamente
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+def get_user_by_email(db: Session, email: str) -> Optional[User]:
+    """
+    busca um usuário no banco pelo email
+    retorna o objeto User ou None se não encontrar
+    """
+    return db.query(User).filter(User.email == email).first()
+
+def create_user(db: Session, email: str, hashed_password: str) -> User:
+    """
+    cria um novo usuário no banco de dados
+    """
+    db_user = User(
+        email=email,
+        hashed_password=hashed_password
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+# ============================================================
+# CONFIGURAÇÕES DE JWT
+# ============================================================
+
 SECRET_KEY = os.getenv("SECRET_KEY", "CHAVE_SECRETA_TROQUE_ISSO_EM_PRODUCAO")
-
 ALGORITHM = "HS256"
-
 ACCESS_TOKEN_EXPIRE_MINUTES = 15
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
+# ============================================================
+# FUNÇÕES DE SENHA (HASH)
+# ============================================================
+
+# contexto para fazer hash de senhas usando argon2
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
-users_db = {}
-
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verifica se a senha em texto puro bate com o hash armazenado"""
     return pwd_context.verify(plain_password, hashed_password)
 
 def get_password_hash(password: str) -> str:
+    """Gera o hash de uma senha"""
     return pwd_context.hash(password)
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    to_encode = data.copy()
-    # pega a data atual e adiciona o tempo de expiração
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+# ============================================================
+# FUNÇÕES DE TOKEN JWT
+# ============================================================
 
-    # token com a expiração e o tipo "access" que seria usado para validar o token depois
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """
+    cria um token de acesso JWT
+    - data: dicionário com os dados a incluir no token (ex: {"sub": email})
+    - expires_delta: tempo adicional de expiração (opcional)
+    """
+    to_encode = data.copy()
+    
+    # calcula o tempo de expiração
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    
+    # adiciona a expiração e o tipo do token
     to_encode.update({
         "exp": expire,
         "type": "access"
     })
     
-    # retorna o token jwt assinado com a chave secreta e o algoritmo definido
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-
 def create_refresh_token(data: dict) -> str:
+    """
+    cria um token de refresh JWT
+    usado para obter um novo access token sem fazer login novamente
+    """
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    
     to_encode.update({
         "exp": expire,
         "type": "refresh"
     })
+    
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
+
 def verify_token(token: str, expected_type: str = "access") -> Optional[dict]:
-    # se o token for inválido ou expirado, a função lança um erro e retornará "None"
-    # mas, se o token for válido, ele retorna o payload decodificado, com o email, a data de expiração e o tipo do token (access ou refresh)
-    # acess -> token de acesso, usado para acessar rotas protegidas
-    # refresh -> token de atualização, usado para obter um novo token de acesso sem precisar fazer
-    
+    """
+    verifica se um token JWT é válido
+    - token: o token JWT a verificar
+    - expected_type: "access" ou "refresh"
+    retorna o payload decodificado ou None se inválido.
+    """
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         
+        # verifica se o tipo do token é o esperado
         if payload.get("type") != expected_type:
             return None
         
@@ -68,20 +173,29 @@ def verify_token(token: str, expected_type: str = "access") -> Optional[dict]:
     except JWTError:
         return None
 
-# esquema para que o token seja extraído e validado automaticamente nas rotas protegidas
+
+# ============================================================
+# FASTAPI SECURITY
+# ============================================================
+
+# Schema OAuth2 para extrair o token automaticamente das requisições
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
-# caso o usuario faça o login, a rota auth/login gera um token de acesso e
-# um token de atualização, e o token de acesso é usado para acessar as rotas protegidas,
-# enquanto o token de atualização é usado para obter um novo token de acesso quando
-# o token de acesso expira
+# ============================================================
+# FUNÇÃO PARA OBTER USUÁRIO ATUAL
+# ============================================================
 
-# caso ele seja válido, usando a função verify_token(token, "access")
-# se o token for válido, a função retorna o email do usuário, que pode ser usado para identificar
-# o usuário nas rotas protegidas, se não for, a função lança um erro 401, indicando que o token
-# é inválido ou expirado
-
-def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
+def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+) -> dict:
+    """
+    dependency que obtém o usuário atual a partir do token JWT
+    usada em rotas protegidas com: current_user: dict = Depends(get_current_user)
+    
+    retorna um dict com email e id do usuário
+    """
+    # verifica se o token é válido
     payload = verify_token(token, "access")
     
     if payload is None:
@@ -91,12 +205,17 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
             headers={"WWW-Authenticate": "Bearer"}
         )
     
+    # extrai o email do payload
     email = payload.get("sub")
     
     if email is None:
         raise HTTPException(status_code=401, detail="Token sem e-mail!")
     
-    if email not in users_db:
+    # Busca o usuário no banco de dados
+    user = get_user_by_email(db, email)
+    
+    if user is None:
         raise HTTPException(status_code=401, detail="Usuário não encontrado!")
     
-    return {"email": email}
+    # Retorna os dados do usuário (email e id)
+    return {"email": user.email, "id": user.id}

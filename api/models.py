@@ -51,3 +51,19 @@ class LampColor(BaseModel):
 
 class LampPower(BaseModel):
     power: bool  # True = ligado, False = desligado
+
+class UserClassificationIn(BaseModel):
+    class_name: str
+    color_name: str
+    color_hex: str
+    
+class UserClassificationOut(BaseModel):
+    class_name: str
+    color_name: str
+    color_hex: str
+    is_active: bool
+
+class UserClassificationUpdate(BaseModel):
+    color_name: Optional[str] = None
+    color_hex: Optional[str] = None
+    is_active: Optional[bool] = None

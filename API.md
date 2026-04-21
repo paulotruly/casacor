@@ -38,7 +38,7 @@ Authorization: Bearer <access_token>
 
 | Método | Endpoint | Descrição |
 |--------|----------|-----------|
-| POST | /classify | classifica áudio e altera cor da lâmpada |
+| POST | /classify | Classifica áudio e altera cor da lâmpada |
 
 **Corpo da requisição:**
 ```json

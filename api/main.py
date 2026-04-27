@@ -8,7 +8,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from models import (
-    UserCreate, UserLogin, Token, TokenRefresh,
+    LoginResponse, UserCreate, UserLogin, Token, TokenRefresh,
     ClassifyRequest, ClassifyResponse,
     ColorConfig, ColorConfigUpdate,
     LampStatus, LampColor, LampPower,
@@ -46,6 +46,11 @@ app.add_middleware(
 # ROTAS DE AUTENTICAÇÃO
 # ============================================================
 
+@app.get("/users/me")
+def get_current_user_info(current_user: dict = Depends(get_current_user)):
+    """retorna dados do usuário atual"""
+    return {"id": current_user["id"], "email": current_user["email"]}
+
 @app.post("/auth/register")
 def register(user: UserCreate, db: Session = Depends(get_db)):
     """
@@ -68,7 +73,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     color_config.initialize_user_classes(db, db_user.id)
     return {"message": "Usuário registrado!"}
 
-@app.post("/auth/login", response_model=Token)
+@app.post("/auth/login", response_model=LoginResponse)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """
     rota para fazer login e obter tokens JWT
@@ -95,7 +100,12 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     access_token = create_access_token(data={"sub": user_email})
     refresh_token = create_refresh_token(data={"sub": user_email})
     
-    return Token(access_token=access_token, refresh_token=refresh_token)
+    return LoginResponse(
+        id = user.id,
+        email = user_email,
+        access_token = access_token,
+        refresh_token = refresh_token
+    )
 
 
 @app.post("/auth/refresh", response_model=Token)

@@ -103,8 +103,8 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     return LoginResponse(
         id = user.id,
         email = user_email,
-        access_token = access_token,
-        refresh_token = refresh_token
+        accessToken = access_token,
+        refreshToken = refresh_token
     )
 
 

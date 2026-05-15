@@ -12,11 +12,11 @@ from models import (
     ClassifyRequest, ClassifyResponse,
     ColorConfig, ColorConfigUpdate,
     LampStatus, LampColor, LampPower,
-    UserClassificationIn, UserClassificationOut, UserClassificationUpdate
+    UserClassificationIn, UserClassificationOut, UserClassificationUpdate, LifxTokenUpdate
 )
 
 from auth import (
-    get_password_hash, verify_password,
+    encrypt_lifx_token, decrypt_lifx_token, get_password_hash, verify_password,
     create_access_token, create_refresh_token, verify_token,
     get_current_user, get_db, get_user_by_email, create_user, User
 )
@@ -141,13 +141,18 @@ def classify_audio_endpoint(
     rota para classificar áudio e alterar a cor da lâmpada
     """
     user_id = current_user["id"]
+    user = db.query(User).filter(User.id == user_id).first() # busca o usuário no banco de dados usando o ID do token JWT
+    
+    # descriptografa o token LIFX do usuário
+    token = decrypt_lifx_token(user.lifx_token)
+    
     classes_ativas = color_config.get_user_active_classes(db, user_id)
     resultado = audio_classifier.classify_audio(request.audio, classes_ativas)
     
     classe_detectada = resultado["detected_class"]
     confianca = resultado["confidence"]
     classes_secundarias = resultado["secondary_classes"]
-    
+
     # obtém a cor configurada para ESSE usuário
     cor_info = color_config.get_user_color_for_class(db, user_id, classe_detectada)
 
@@ -157,9 +162,8 @@ def classify_audio_endpoint(
 
     cor_nome = cor_info["name"]
     cor_hex = cor_info["hex"]
-    
-    # envia o comando para a lâmpada
-    lifx_client.set_color(cor_hex, brightness=0.75)
+
+    lifx_client.set_color(cor_hex, brightness=0.75, token=token) # aqui a gente chama a função set_color do lifx_client, passando a cor em hex e um brilho fixo de 0.75 (pode ser configurável depois)
     
     return ClassifyResponse(
         detected_class=classe_detectada,
@@ -296,40 +300,71 @@ def delete_user_class(
     
     return {"message": "Classe removida", "class_name": class_name}
 
+@app.post("/user/lifx-token")
+def save_lifx_token(
+    token_data: LifxTokenUpdate, # recebe o token da requisição
+    current_user: dict = Depends(get_current_user), # obtém o usuário atual a partir do token JWT (criamos a função get_current_user justamente pra isso)
+    db: Session = Depends(get_db) # dependência para acessar o banco de dados
+):
+    user = db.query(User).filter(User.id == current_user["id"]).first() # busca o usuário no banco usando o ID do token JWT
+    user.lifx_token = encrypt_lifx_token(token_data.token) if token_data.token else None # atualiza o campo lifx_token
+    # do usuário com o token recebido (ou None se for vazio) e criptografado usando a função encrypt_lifx_token que criamos no auth.py
+    db.commit() # salva a alteração no banco de dados
+    return {"message": "Token LIFX atualizado com sucesso!"}
+
+@app.get("/user/lifx-token/status")
+def get_lifx_token_status(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.id == current_user["id"]).first()
+    has_token = bool(user.lifx_token)
+    return {"has_token": has_token}
+
 # ============================================================
 # ROTAS DA LÂMPADA
 # ============================================================
 
 @app.get("/lamp/status", response_model=LampStatus)
-def get_lamp_status(current_user: dict = Depends(get_current_user)):
+def get_lamp_status(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
-    pbtém o status atual da lâmpada
+    obtém o status atual da lâmpada e atualiza o estado interno do lifx_client com os dados reais da API LIFX, se o token estiver configurado
     """
-    status = lifx_client.get_status()
+    user = db.query(User).filter(User.id == current_user["id"]).first()
+    token = decrypt_lifx_token(user.lifx_token)
+    status = lifx_client.get_status(token=token)
     return LampStatus(**status)
-
 
 @app.post("/lamp/power")
 def set_lamp_power(
     power: LampPower,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     liga ou desliga a lâmpada
     """
-    resultado = lifx_client.set_power(power.power)
+    user = db.query(User).filter(User.id == current_user["id"]).first()
+    token = decrypt_lifx_token(user.lifx_token)
+    resultado = lifx_client.set_power(power.power, token=token)
     return resultado
 
 
 @app.post("/lamp/color")
 def set_lamp_color(
     color: LampColor,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     define a cor e brilho da lâmpada
     """
-    resultado = lifx_client.set_color(color.color, color.brightness)
+    user = db.query(User).filter(User.id == current_user["id"]).first()
+    token = decrypt_lifx_token(user.lifx_token)
+    resultado = lifx_client.set_color(color.color, brightness=color.brightness, token=token)
     return resultado
 
 

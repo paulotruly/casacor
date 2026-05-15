@@ -12,10 +12,6 @@ load_dotenv()
 # os.getenv("LIFX_TOKEN", "") tenta pegar a variável de ambiente LIFX_TOKEN, e se não encontrar, retorna uma string vazia
 LIFX_TOKEN = os.getenv("LIFX_TOKEN", "")
 
-HEADERS = {
-    "Authorization": f"Bearer {LIFX_TOKEN}"
-}
-
 BASE_URL = "https://api.lifx.com/v1"
 
 # esses são os estados atuais da lâmpada, usados para simular o comportamento quando o token não está configurado
@@ -27,30 +23,36 @@ _lamp_power: str = "on"
 _lamp_color: str = "#FFFFFF"
 _lamp_brightness: float = 1.0
 
-def is_configured() -> bool:
-    return bool(LIFX_TOKEN and LIFX_TOKEN != "")
+# essa função verifica se o token da API LIFX está configurado
+# ou seja, se a variável de ambiente LIFX_TOKEN tem um valor válido (não vazio)
+def is_configured(token: Optional[str] = None) -> bool:
+    effective = token or LIFX_TOKEN # se um token for passado como argumento, usa ele, senão usa o LIFX_TOKEN da variável de ambiente
+    return bool(effective) # retorna True se o token tiver um valor válido (não vazio), ou False se for vazio
 
-def set_power(power: bool) -> dict:
+def set_power(power: bool, token: Optional[str] = None) -> dict:
     global _lamp_power
+    effective = token or LIFX_TOKEN
     
     # se o token da api não estiver configurado, atualiza o estado da lâmpada
     # e retorna uma resposta simulada, sem tentar acessar a API LIFX
-    if not is_configured():
+    if not effective:
         _lamp_power = "on" if power else "off"
         return {"status": "ok", "message": "Token não configurado - simulado", "power": _lamp_power}
     
     # "on" se power for True, "off" se for False
     power_value = "on" if power else "off"
+    headers = {"Authorization": f"Bearer {effective}"} # usa o token passado como argumento,
+    # ou o token da variável de ambiente, para autenticar a requisição na API LIFX
     
     try:
         # PUT /lights/all/power para ligar ou desligar a lâmpada, passando o valor "on" ou "off" no corpo da requisição
         response = requests.put(
             f"{BASE_URL}/lights/all/power",
-            headers=HEADERS,
+            headers=headers, # usa o token passado como argumento, ou o token da variável de ambiente, para autenticar a requisição na API LIFX
             data={"power": power_value}
         )
-        if response.status_code == 207:
-            _lamp_power = power_value
+        if response.status_code == 207: 
+            _lamp_power = power_value 
             return {"status": "ok", "power": power_value}
         else:
             return {"status": "error", "message": f"Erro {response.status_code}: {response.text}"}
@@ -61,23 +63,25 @@ def set_power(power: bool) -> dict:
         return {"status": "error", "message": f"Erro de conexão: {str(e)}", "simulated": True}
 
 
-def set_color(color_hex: str, brightness: float = 1.0) -> dict:
+def set_color(color_hex: str, brightness: float = 1.0, token: Optional[str] = None) -> dict:
     global _lamp_color, _lamp_brightness
+    effective = token or LIFX_TOKEN
     
-    if not is_configured():
-        _lamp_color = color_hex
+    if not effective:
+        _lamp_color = color_hex 
         _lamp_brightness = brightness
         return {"status": "ok", "message": "Token não configurado - simulado", "color": color_hex}
     
     hsb = _hex_to_hsb(color_hex)
     brightness = max(0.0, min(1.0, brightness))
+    headers = {"Authorization": f"Bearer {effective}"}
     
     try:
         # PUT /lights/all/state
         # para mudar a cor e o brilho da lâmpada, passando os valores no corpo da requisição, usando a string HSB que a API LIFX aceita
         response = requests.put(
             f"{BASE_URL}/lights/all/state",
-            headers=HEADERS,
+            headers=headers, # usa o token passado como argumento, ou o token da variável de ambiente, para autenticar a requisição na API LIFX
             data={
                 "power": "on",
                 "color": hsb,
@@ -97,11 +101,11 @@ def set_color(color_hex: str, brightness: float = 1.0) -> dict:
         _lamp_brightness = brightness
         return {"status": "error", "message": f"Erro de conexão: {str(e)}", "simulated": True}
 
-
-def get_status() -> dict:
+def get_status(token: Optional[str] = None) -> dict:
     global _lamp_power, _lamp_color, _lamp_brightness
-    
-    if not is_configured():
+    effective = token or LIFX_TOKEN
+
+    if not effective:
         return {
             "power": _lamp_power,
             "color": _lamp_color,
@@ -110,22 +114,24 @@ def get_status() -> dict:
             "message": "Token não configurado - modo simulado"
         }
     
+    headers = {"Authorization": f"Bearer {effective}"}
+    
     try:
         # GET /lights/all
         # aqui a gente pega o status de todas as lâmpadas, mas como só tem uma,
         # a gente pega a primeira da lista, e extrai o status dela (power, color e brightness)
         response = requests.get(
             f"{BASE_URL}/lights/all",
-            headers=HEADERS
+            headers=headers
         )
         
         if response.status_code == 200:
-            data = response.json()
-            if data:
-                light = data[0]
-                _lamp_power = light.get("power", "off")
-                _lamp_color = _hsb_to_hex(light.get("color", {}))
-                _lamp_brightness = light.get("brightness", 1.0)
+            data = response.json() # a resposta da API LIFX é uma lista de lâmpadas, mesmo que só tenha uma, então a gente pega a primeira da lista
+            if data: # verifica se a lista não está vazia
+                light = data[0] # pega a primeira lâmpada da lista
+                _lamp_power = light.get("power", "off") # atualiza o estado da lâmpada com o valor real da API LIFX, ou "off" se não tiver a chave "power"
+                _lamp_color = _hsb_to_hex(light.get("color", {})) # atualiza o estado da lâmpada com o valor real da API LIFX, convertendo a cor de HSB para HEX, ou "#FFFFFF" se não tiver a chave "color"
+                _lamp_brightness = light.get("brightness", 1.0) # atualiza o estado da lâmpada com o valor real da API LIFX, ou 1.0 se não tiver a chave "brightness"
                 
                 return {
                     "power": _lamp_power,

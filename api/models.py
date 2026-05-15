@@ -74,3 +74,7 @@ class UserClassificationUpdate(BaseModel):
     color_name: Optional[str] = None
     color_hex: Optional[str] = None
     is_active: Optional[bool] = None
+
+# pra atualizar o token do LiftX (opcional)
+class LifxTokenUpdate(BaseModel):
+    token: str

@@ -17,10 +17,15 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Boolean
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 
+import hashlib
+import base64
+from cryptography.fernet import Fernet
+
 # Variáveis de ambiente
 import os
 from dotenv import load_dotenv
 load_dotenv()
+
 
 # ============================================================
 # CONFIGURAÇÕES DO BANCO DE DADOS
@@ -45,6 +50,7 @@ class User(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    liftx_token = Column(String(255), nullable=True) # token para integração com LiftX (opcional)
 
 class UserClassification(Base):
     __tablename__ = "user_classifications"
@@ -95,7 +101,7 @@ def create_user(db: Session, email: str, hashed_password: str) -> User:
 # CONFIGURAÇÕES DE JWT
 # ============================================================
 
-SECRET_KEY = os.getenv("SECRET_KEY", "CHAVE_SECRETA_TROQUE_ISSO_EM_PRODUCAO")
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 15
 REFRESH_TOKEN_EXPIRE_DAYS = 7
@@ -219,3 +225,23 @@ def get_current_user(
     
     # Retorna os dados do usuário (email e id)
     return {"email": user.email, "id": user.id}
+
+# ============================================================
+# FUNÇÕES DE ENCRIPTAÇÃO DO TOKEN LIFX
+# ============================================================
+
+def _get_fernet() -> Fernet: # função interna para criar o objeto Fernet de encriptação usando a chave secreta
+    key = base64.urlsafe_b64encode(hashlib.sha256(SECRET_KEY.encode()).digest())
+    return Fernet(key)
+
+# essas funções são usadas para encriptar e decriptar o token LIFX
+# antes de armazenar no banco, para aumentar a segurança caso o banco seja comprometido
+def encrypt_lifx_token(token: str) -> str:
+    if not token:
+        return ""
+    return _get_fernet().encrypt(token.encode()).decode()
+
+def decrypt_lifx_token(encrypted_token: str) -> str:
+    if not encrypted_token:
+        return ""
+    return _get_fernet().decrypt(encrypted_token.encode()).decode()

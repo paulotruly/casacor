@@ -143,11 +143,26 @@ def classify_audio_endpoint(
     user_id = current_user["id"]
     user = db.query(User).filter(User.id == user_id).first() # busca o usuário no banco de dados usando o ID do token JWT
     
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado")
+
     # descriptografa o token LIFX do usuário
-    token = decrypt_lifx_token(user.lifx_token)
-    
+    # token = decrypt_lifx_token(user.liftx_token)
+
+    token = None
+
+    if user.liftx_token:
+        try:
+            token = decrypt_lifx_token(user.liftx_token)
+        except Exception as e:
+            print("Erro ao descriptografar token:", e)
+            token = None
+
+    # if not token:
+    #    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token LIFX não configurado para este usuário")
+
     classes_ativas = color_config.get_user_active_classes(db, user_id)
-    resultado = audio_classifier.classify_audio(request.audio, classes_ativas)
+    resultado = audio_classifier.classify_audio(request.audio)
     
     classe_detectada = resultado["detected_class"]
     confianca = resultado["confidence"]
@@ -163,8 +178,17 @@ def classify_audio_endpoint(
     cor_nome = cor_info["name"]
     cor_hex = cor_info["hex"]
 
-    lifx_client.set_color(cor_hex, brightness=0.75, token=token) # aqui a gente chama a função set_color do lifx_client, passando a cor em hex e um brilho fixo de 0.75 (pode ser configurável depois)
-    
+    # lifx_client.set_color(cor_hex, brightness=0.75, token=token) # aqui a gente chama a função set_color do lifx_client, passando a cor em hex e um brilho fixo de 0.75 (pode ser configurável depois)
+    if token:
+        try:
+            lifx_client.set_color(
+                cor_hex,
+                brightness=0.75,
+                token=token
+            )
+        except Exception as e:
+            print("Erro LIFX:", e)
+
     return ClassifyResponse(
         detected_class=classe_detectada,
         confidence=confianca,
@@ -218,6 +242,22 @@ def get_all_user_classes(
         )
         for c in configs
     ]
+
+# essa função é usada para retornar todas as classes
+# de áudio que o modelo AST consegue classificar
+# com isso, dá pra exibir uma lista de opções pro usuário configurar suas classes e adicionar novas com a função add_user_class
+# passando o nome da classe (ex: "Music") e a cor que ele quer associar (ex: "Azul", "#0000FF", etc)
+@app.get("/ai/classes/all")
+def get_all_ai_classes():
+    model, _ = audio_classifier._get_model()
+
+    return sorted(
+        [
+            {"id": idx, "class_name": label}
+            for idx, label in model.config.id2label.items()
+        ],
+        key=lambda x: x["class_name"]
+    )
 
 @app.put("/config/user/classes/{class_name}")
 def update_user_class(

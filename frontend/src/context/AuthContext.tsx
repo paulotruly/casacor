@@ -1,4 +1,5 @@
-import { getToken, setToken, getUserId, setUserId, removeToken, removeUserId } from "@/lib/cookies";
+import { getMe } from "@/api";
+import { getToken, setToken, getUserId, setUserId, removeToken, removeUserId, setRefreshToken } from "@/lib/cookies";
 import type { AuthResponse, UserResponse } from "@/types";
 import { createContext, useContext, useEffect, useReducer, type ReactNode } from "react";
 
@@ -104,6 +105,7 @@ export function AuthProvider({children}: AuthProviderProps) {
             
             const data: AuthResponse = await response.json()
             setToken(data.accessToken)
+            setRefreshToken(data.refreshToken)
             setUserId(data.id)
             dispatch({ type: "LOGIN", payload: data })
             
@@ -120,19 +122,13 @@ export function AuthProvider({children}: AuthProviderProps) {
     }
 
     const fetchUserDetails = async () => {
-        const response = await fetch("http://localhost:8000/users/me", {
-            headers: { 
-                "Authorization": `Bearer ${getToken()}`, // token do cookie
-                "Content-Type": "application/json"
-            }
-        })
-        
-        // se der erro, não faz nada (silencioso)
-        if (!response.ok) return
-        
-        // converte resposta para JSON
-        const data: UserResponse = await response.json()
-        dispatch({ type: "SET_USER_DETAILS", payload: data })
+        try {
+            const data = await getMe()  // Isso já envia o token automaticamente!
+            dispatch({ type: "SET_USER_DETAILS", payload: data })
+        } catch (error) {
+            // Erro silencioso se não tiver token ou token inválido
+            console.log("Erro ao buscar dados do usuário:", error)
+        }
     }
 
     useEffect(() => {
@@ -144,7 +140,8 @@ export function AuthProvider({children}: AuthProviderProps) {
                     id: parseInt(getUserId() || "0"), 
                     email: "", 
                     accessToken: token, 
-                    refreshToken: "" 
+                    refreshToken: "",
+                    tokenType: "Bearer"
                 }
             })
             

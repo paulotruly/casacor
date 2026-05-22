@@ -19,7 +19,7 @@ export interface AuthResponse {
   email: string;
   accessToken: string;
   refreshToken: string;
-  tokenType: string;
+  tokenType?: string;
 }
 
 export interface RefreshTokenInput {
@@ -42,7 +42,7 @@ export interface UserResponse {
 // clássificação de áudio
 
 export interface ClassifyAudioInput {
-  audio: string;
+  audio: Blob;
 }
 
 export type SecondaryClass = [string, number];

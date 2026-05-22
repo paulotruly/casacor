@@ -2,7 +2,9 @@
 main.py - Rotas da API SONORA
 """
 
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
+
+from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -35,12 +37,11 @@ app = FastAPI(
 # CORS: permite que o front-end (em outra porta) faça requisições
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=["http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 # ============================================================
 # ROTAS DE AUTENTICAÇÃO
@@ -104,7 +105,8 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         id = user.id,
         email = user_email,
         accessToken = access_token,
-        refreshToken = refresh_token
+        refreshToken = refresh_token,
+        tokenType="Bearer"
     )
 
 
@@ -132,8 +134,8 @@ def refresh_token(token_data: TokenRefresh):
 # ============================================================
 
 @app.post("/classify", response_model=ClassifyResponse)
-def classify_audio_endpoint(
-    request: ClassifyRequest,
+async def classify_audio_endpoint(
+    audio: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -146,39 +148,60 @@ def classify_audio_endpoint(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado")
 
+    # lê o arquivo de áudio
+    content = await audio.read()
+    
+    # validar se arquivo está vazio
+    if len(content) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Arquivo de áudio vazio"
+        )
+    
+    # validar tamanho do arquivo (máximo 10MB)
+    max_size = 10 * 1024 * 1024  # 10MB
+    if len(content) > max_size:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Arquivo muito grande (máximo 10MB)"
+        )
+    
+    # tentar classificar o áudio
+    try:
+        resultado = audio_classifier.classify_audio(content)
+    except ValueError as e:
+        # erro relacionado ao formato ou leitura do arquivo
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        # erro inesperado
+        print(f"Erro inesperado ao classificar áudio: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao processar o áudio. Verifique se é um arquivo WAV válido."
+        )
+    
+    classe_detectada = resultado["detected_class"]
+    confianca = resultado["confidence"]
+    classes_secundarias = resultado["secondary_classes"]
+    cor_info = color_config.get_user_color_for_class(db, user_id, classe_detectada) # obtém a cor configurada para ESSE usuário
+    # se o usuário não tiver configurado essa classe, usa branco
+    if cor_info is None:
+        cor_info = {"name": "Branco", "hex": "#FFFFFF"}
+    cor_nome = cor_info["name"]
+    cor_hex = cor_info["hex"]
+
     # descriptografa o token LIFX do usuário
-    # token = decrypt_lifx_token(user.liftx_token)
-
     token = None
-
     if user.liftx_token:
         try:
             token = decrypt_lifx_token(user.liftx_token)
         except Exception as e:
             print("Erro ao descriptografar token:", e)
             token = None
-
-    # if not token:
-    #    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token LIFX não configurado para este usuário")
-
-    classes_ativas = color_config.get_user_active_classes(db, user_id)
-    resultado = audio_classifier.classify_audio(request.audio)
-    
-    classe_detectada = resultado["detected_class"]
-    confianca = resultado["confidence"]
-    classes_secundarias = resultado["secondary_classes"]
-
-    # obtém a cor configurada para ESSE usuário
-    cor_info = color_config.get_user_color_for_class(db, user_id, classe_detectada)
-
-    # se o usuário não tiver configurado essa classe, usa branco
-    if cor_info is None:
-        cor_info = {"name": "Branco", "hex": "#FFFFFF"}
-
-    cor_nome = cor_info["name"]
-    cor_hex = cor_info["hex"]
-
-    # lifx_client.set_color(cor_hex, brightness=0.75, token=token) # aqui a gente chama a função set_color do lifx_client, passando a cor em hex e um brilho fixo de 0.75 (pode ser configurável depois)
+    # tenta mudar a cor da lâmpada se o token estiver configurado
     if token:
         try:
             lifx_client.set_color(
@@ -196,7 +219,6 @@ def classify_audio_endpoint(
         applied_color=cor_nome,
         color_hex=cor_hex
     )
-
 
 # ============================================================
 # ROTAS DE CONFIGURAÇÃO DE CORES

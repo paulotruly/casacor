@@ -1,5 +1,4 @@
 import torch
-import base64
 import io
 import numpy as np
 from transformers import AutoFeatureExtractor, ASTForAudioClassification
@@ -21,12 +20,17 @@ def _get_model():
         print("Modelo carregado!")
     return _model, _feature_extractor
 
-def classify_audio(audio_base64: str) -> Dict:
+def classify_audio(audio_bytes: bytes) -> Dict:
     model, feature_extractor = _get_model()
+
+    if not audio_bytes or len(audio_bytes) == 0:
+        raise ValueError("Arquivo de áudio vazio")
     
-    # pega o áudio em base64, decodifica para bytes, e depois lê como um array numpy usando soundfile
-    audio_bytes = base64.b64decode(audio_base64)
-    audio_array, sample_rate = sf.read(io.BytesIO(audio_bytes))
+    # lê o áudio direto dos bytes como um array numpy usando soundfile
+    try:
+        audio_array, sample_rate = sf.read(io.BytesIO(audio_bytes))
+    except Exception as e:
+        raise ValueError(f"Erro ao ler arquivo de áudio: {str(e)}. Verifique se é um arquivo WAV válido.")
     
     # serve pra caso o áudio tenha mais de um canal (ex: estéreo), ele pega apenas um canal (ex: o esquerdo)
     # porque o modelo AST foi treinado com áudio mono (1 canal), então se tiver mais de um canal, ele pode confundir o modelo

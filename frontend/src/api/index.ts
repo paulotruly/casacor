@@ -34,9 +34,16 @@ export async function getMe(): Promise<UserResponse> {
 
 // classificação de áudio
 
-// essa função recebe o áudio em base64, envia pra API e recebe a classificação de volta
+// essa função recebe o áudio como Blob, envia pra API como FormData e recebe a classificação de volta
 export async function classifyAudio(input: ClassifyAudioInput): Promise<ClassifyAudioResponse> {
-  const response = await api.post<ClassifyAudioResponse>("/classify", input);
+  const formData = new FormData();
+  formData.append("audio", input.audio, "audio.wav");
+  
+  const response = await api.post<ClassifyAudioResponse>("/classify", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
   return response.data;
 }
 
@@ -48,7 +55,7 @@ export async function getClasses(): Promise<SoundClass[]> { // visualiza as clas
 }
 
 export async function getAllClasses(): Promise<SoundClass[]> { // visualiza todas as classes de som disponíveis, inclusive as inativas, para o usuário escolher quais ativar
-  const response = await api.get<SoundClass[]>("/config/user/classes/all");
+  const response = await api.get<SoundClass[]>("/ai/classes/all");
   return response.data;
 }
 

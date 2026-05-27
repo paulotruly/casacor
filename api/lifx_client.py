@@ -82,14 +82,14 @@ def set_color(color_hex: str, brightness: float = 1.0, token: Optional[str] = No
         response = requests.put(
             f"{BASE_URL}/lights/all/state",
             headers=headers, # usa o token passado como argumento, ou o token da variável de ambiente, para autenticar a requisição na API LIFX
-            data={
+            json={
                 "power": "on",
                 "color": hsb,
                 "brightness": brightness
             }
         )
         
-        if response.status_code == 207:
+        if response.status_code == 207 or response.status_code == 202:
             _lamp_color = color_hex
             _lamp_brightness = brightness
             return {"status": "ok", "color": color_hex, "brightness": brightness}

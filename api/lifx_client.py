@@ -10,7 +10,7 @@ from typing import Optional
 load_dotenv()
 # o token é necessário para autenticar as requisições na API LIFX Cloud, e controlar a lâmpada
 # os.getenv("LIFX_TOKEN", "") tenta pegar a variável de ambiente LIFX_TOKEN, e se não encontrar, retorna uma string vazia
-LIFX_TOKEN = os.getenv("LIFX_TOKEN", "")
+LIFX_TOKEN = os.getenv("LIFX_TOKEN")
 
 BASE_URL = "https://api.lifx.com/v1"
 
@@ -144,6 +144,55 @@ def get_status(token: Optional[str] = None) -> dict:
     except requests.exceptions.RequestException as e:
         return {"status": "error", "message": str(e), "simulated": True}
 
+
+def validate_lifx_token(token: str) -> dict:
+    """
+    valida o token LIFX fazendo uma requisição simples à API LIFX
+    Retorna {
+        "is_valid": bool,
+        "error": str|None,
+        "message": str
+    }
+    """
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    try:
+        response = requests.get(
+            f"{BASE_URL}/lights/all",
+            headers=headers
+        )
+        
+        if response.status_code == 200:
+            return {
+                "is_valid": True,
+                "error": None,
+                "message": "Token válido"
+            }
+        elif response.status_code == 401:
+            return {
+                "is_valid": False,
+                "error": "Token inválido ou expirado",
+                "message": "Unauthorized"
+            }
+        elif response.status_code == 403:
+            return {
+                "is_valid": False,
+                "error": "Token sem permissão",
+                "message": "Forbidden"
+            }
+        else:
+            return {
+                "is_valid": False,
+                "error": f"Erro {response.status_code}",
+                "message": response.text
+            }
+    
+    except requests.exceptions.RequestException as e:
+        return {
+            "is_valid": False,
+            "error": f"Erro de conexão: {str(e)}",
+            "message": str(e)
+        }
 
 def _hex_to_hsb(hex_color: str) -> str:
     # aqui é só pra trasnformar o hex em hsb

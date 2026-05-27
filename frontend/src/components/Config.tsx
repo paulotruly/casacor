@@ -6,10 +6,27 @@ import {
   getClasses,
   updateClass,
 } from '@/api'
-
 import type { SoundClass } from '@/types'
+import LifxTokenModal from '@/components/LifxTokenModal'
+import { getLifxTokenStatus } from '@/api/lifx'
 
 function Config() {
+  // modal de token
+  const [hasLifxToken, setHasLifxToken] = useState(false)
+  const [isLifxModalOpen, setIsLifxModalOpen] = useState(false)
+  const [loadingLifxStatus, setLoadingLifxStatus] = useState(true)
+
+  async function fetchLifxTokenStatus() {
+  try {
+    const status = await getLifxTokenStatus()
+    setHasLifxToken(status.has_token)
+  } catch (error) {
+    console.error(error)
+  } finally {
+    setLoadingLifxStatus(false)
+  }
+}
+
   const [classes, setClasses] = useState<SoundClass[]>([])
   const [allClasses, setAllClasses] = useState<SoundClass[]>([])
 
@@ -147,10 +164,41 @@ function Config() {
 
   useEffect(() => {
     fetchData()
+    fetchLifxTokenStatus()
   }, [])
 
+  useEffect(() => {
+  if (!isLifxModalOpen) {
+    fetchLifxTokenStatus()
+  }
+}, [isLifxModalOpen])
+
   return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-zinc-950 flex items-center justify-center flex-col p-6">
+
+
+      <div className="mt-8 bg-zinc-800 border border-zinc-700 rounded-2xl p-5 mb-10">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-white">
+              Token LIFX
+            </h2>
+            
+            <p className="text-zinc-400 text-sm mt-1">
+              {hasLifxToken 
+                ? '✓ Token configurado' 
+                : '✕ Token não configurado'}
+            </p>
+          </div>
+          <button
+            onClick={() => setIsLifxModalOpen(true)}
+            className="px-6 py-2 rounded-2xl font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all"
+          >
+            {hasLifxToken ? 'Atualizar' : 'Configurar'}
+          </button>
+        </div>
+      </div>
+
       <div className="w-full max-w-2xl bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-2xl">
         <h1 className="text-2xl font-bold text-white mb-6">
           Configurações
@@ -360,6 +408,14 @@ function Config() {
           </div>
         </div>
       )}
+
+    <LifxTokenModal
+      isOpen={isLifxModalOpen}
+      onClose={() => setIsLifxModalOpen(false)}
+      onTokenSaved={() => fetchLifxTokenStatus()}
+      existingToken={hasLifxToken}
+    />
+
     </div>
   )
 }

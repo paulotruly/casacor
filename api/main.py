@@ -41,6 +41,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
 )
 
 # ============================================================
@@ -368,8 +370,16 @@ def save_lifx_token(
     current_user: dict = Depends(get_current_user), # obtém o usuário atual a partir do token JWT (criamos a função get_current_user justamente pra isso)
     db: Session = Depends(get_db) # dependência para acessar o banco de dados
 ):
+    validation = lifx_client.validate_lifx_token(token_data.token)
+
+    if not validation['is_valid']:
+        raise HTTPException(
+            status_code=400,
+            detail=validation["error"]
+        )
+
     user = db.query(User).filter(User.id == current_user["id"]).first() # busca o usuário no banco usando o ID do token JWT
-    user.lifx_token = encrypt_lifx_token(token_data.token) if token_data.token else None # atualiza o campo lifx_token
+    user.liftx_token = encrypt_lifx_token(token_data.token) if token_data.token else None # atualiza o campo lifx_token
     # do usuário com o token recebido (ou None se for vazio) e criptografado usando a função encrypt_lifx_token que criamos no auth.py
     db.commit() # salva a alteração no banco de dados
     return {"message": "Token LIFX atualizado com sucesso!"}
@@ -380,8 +390,15 @@ def get_lifx_token_status(
     db: Session = Depends(get_db)
 ):
     user = db.query(User).filter(User.id == current_user["id"]).first()
-    has_token = bool(user.lifx_token)
-    return {"has_token": has_token}
+    has_token = bool(user.liftx_token)
+    is_valid = False
+
+    if has_token:
+        decrypted_token = decrypt_lifx_token(user.liftx_token)
+        validation = lifx_client.validate_lifx_token(decrypted_token)
+        is_valid = validation["is_valid"]
+
+    return {"has_token": has_token, "is_valid": is_valid}
 
 # ============================================================
 # ROTAS DA LÂMPADA

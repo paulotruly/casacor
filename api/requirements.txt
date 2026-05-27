@@ -1,6 +1,6 @@
 sounddevice
 numpy
-spicy
+scipy
 noisereduce
 openai-whisper
 transformers
@@ -18,3 +18,6 @@ email-validator
 soundfile
 sqlalchemy
 pymysql
+requests
+librosa
+python-dotenv

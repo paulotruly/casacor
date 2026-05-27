@@ -35,11 +35,11 @@ api.interceptors.response.use(
         removeToken();
         removeRefreshToken();
         removeUserId();
-        window.location.href = "/login"; // envia pro login
+        window.location.href = "/"; // envia pro login
         return Promise.reject(error);
       }
       try { // tenta renovar o token de acesso
-        const res = await axios.post("http://localhost:3000/auth/refresh", {
+        const res = await axios.post("http://localhost:8000/auth/refresh", {
           refreshToken,
         });
 
@@ -54,7 +54,7 @@ api.interceptors.response.use(
         removeRefreshToken();
         removeUserId();
         toast.error("Sessão expirada, faça login novamente");
-        window.location.href = "/login";
+        window.location.href = "/";
         return Promise.reject(error);
       }
     }

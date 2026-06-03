@@ -3,10 +3,12 @@ import Header from "@/components/header"
 
 function Home() {
   return (
-    <>
+    <div className="min-h-screen bg-casacor-cream flex flex-col">
       <Header/>
-      <Outlet />
-    </>
+      <main className="flex-1">
+        <Outlet />
+      </main>
+    </div>
   )
 }
 

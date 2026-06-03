@@ -11,7 +11,6 @@ import LifxTokenModal from '@/components/LifxTokenModal'
 import { getLifxTokenStatus } from '@/api/lifx'
 
 function Config() {
-  // modal de token
   const [hasLifxToken, setHasLifxToken] = useState(false)
   const [isLifxModalOpen, setIsLifxModalOpen] = useState(false)
   const [loadingLifxStatus, setLoadingLifxStatus] = useState(true)
@@ -31,23 +30,19 @@ function Config() {
   const [allClasses, setAllClasses] = useState<SoundClass[]>([])
 
   const [selectedClass, setSelectedClass] = useState('')
-  const [selectedColor, setSelectedColor] = useState('#22c55e')
+  const [selectedColor, setSelectedColor] = useState('#B79B6C')
   const [selectedColorName, setSelectedColorName] = useState('')
 
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
 
-  // controla se o modal de edição está aberto ou não
   const [isModalOpen, setIsModalOpen] = useState(false)
 
-  // guarda a classe atualmente selecionada pra edição
   const [editingClass, setEditingClass] = useState<SoundClass | null>(null)
 
-  // estados do formulário de edição
-  const [editColor, setEditColor] = useState('#22c55e')
+  const [editColor, setEditColor] = useState('#B79B6C')
   const [editColorName, setEditColorName] = useState('')
 
-  // controla o carregamento das ações dentro do modal
   const [updating, setUpdating] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
@@ -86,7 +81,7 @@ function Config() {
       setClasses((prev) => [...prev, newClass])
 
       setSelectedClass('')
-      setSelectedColor('#22c55e')
+      setSelectedColor('#B79B6C')
       setSelectedColorName('')
     } catch (error) {
       console.error(error)
@@ -95,7 +90,6 @@ function Config() {
     }
   }
 
-  // essa função abre o modal e preenche os campos com os dados atuais da classe
   function handleOpenModal(soundClass: SoundClass) {
     setEditingClass(soundClass)
 
@@ -105,7 +99,6 @@ function Config() {
     setIsModalOpen(true)
   }
 
-  // essa função atualiza as configurações da classe selecionada
   async function handleUpdateClass() {
     if (!editingClass) return
 
@@ -117,7 +110,6 @@ function Config() {
         color_name: editColorName,
       })
 
-      // atualiza a lista localmente sem precisar recarregar tudo da API
       setClasses((prev) =>
         prev.map((item) =>
           item.class_name === editingClass.class_name
@@ -138,7 +130,6 @@ function Config() {
     }
   }
 
-  // essa função remove/desativa a classe do usuário
   async function handleDeleteClass() {
     if (!editingClass) return
 
@@ -147,7 +138,6 @@ function Config() {
 
       await deleteClass(editingClass.class_name)
 
-      // remove a classe da lista local após deletar
       setClasses((prev) =>
         prev.filter(
           (item) => item.class_name !== editingClass.class_name
@@ -174,233 +164,230 @@ function Config() {
 }, [isLifxModalOpen])
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center flex-col p-6">
+    <div className="max-w-editorial mx-auto px-8 lg:px-16 py-12 lg:py-20">
 
-
-      <div className="mt-8 bg-zinc-800 border border-zinc-700 rounded-2xl p-5 mb-10">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-white">
-              Token LIFX
-            </h2>
-            
-            <p className="text-zinc-400 text-sm mt-1">
-              {hasLifxToken 
-                ? '✓ Token configurado' 
-                : '✕ Token não configurado'}
-            </p>
-          </div>
-          <button
-            onClick={() => setIsLifxModalOpen(true)}
-            className="px-6 py-2 rounded-2xl font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all"
-          >
-            {hasLifxToken ? 'Atualizar' : 'Configurar'}
-          </button>
-        </div>
-      </div>
-
-      <div className="w-full max-w-2xl bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-2xl">
-        <h1 className="text-2xl font-bold text-white mb-6">
+      <div className="mb-12">
+        <div className="w-8 h-[1px] bg-casacor-gold mb-6" />
+        <h1 className="text-heading-md text-casacor-black font-light">
           Configurações
         </h1>
+        <p className="text-body-lg text-casacor-gray-medium font-light mt-3">
+          Gerencie as classes de som, cores e integração com a lâmpada LIFX.
+        </p>
+      </div>
 
-        <div className="mb-8">
-          <h2 className="text-lg font-semibold text-white mb-4">
-            Classes configuradas
-          </h2>
+      <div className="grid lg:grid-cols-5 gap-12 lg:gap-16">
 
-          <div className="flex flex-col gap-4">
-            {loading ? (
-              <div className="bg-zinc-800 rounded-2xl p-4">
-                <p className="text-zinc-400">
-                  Carregando classes...
-                </p>
-              </div>
-            ) : classes.length === 0 ? (
-              <div className="bg-zinc-800 rounded-2xl p-4">
-                <p className="text-zinc-400">
-                  Nenhuma classe configurada
-                </p>
-              </div>
-            ) : (
-              classes.map((soundClass) => (
-                <button
-                  key={soundClass.class_name}
-                  onClick={() => handleOpenModal(soundClass)}
-                  className="bg-zinc-800 border border-zinc-700 rounded-2xl p-4 flex items-center justify-between hover:border-green-500 transition-all"
-                >
-                  <div className="text-left">
-                    <h3 className="text-white font-semibold text-lg">
-                      {soundClass.class_name}
-                    </h3>
+        <div className="lg:col-span-3 space-y-10">
 
-                    <p className="text-zinc-400 text-sm mt-1">
-                      {soundClass.color_name}
-                    </p>
-                  </div>
-
-                  <div
-                    className="w-10 h-10 rounded-full border-2 border-white"
-                    style={{
-                      backgroundColor: soundClass.color_hex,
-                    }}
-                  />
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-
-        <div className="bg-zinc-800 border border-zinc-700 rounded-2xl p-5">
-          <h2 className="text-lg font-semibold text-white mb-4">
-            Adicionar nova classe
-          </h2>
-
-          <div className="flex flex-col gap-4">
-            <select
-              value={selectedClass}
-              onChange={(event) => setSelectedClass(event.target.value)}
-              className={`w-full border rounded-xl p-3 text-white outline-none transition-all ${
-                !selectedClass
-                  ? 'bg-zinc-900 border-red-500'
-                  : 'bg-zinc-900 border-zinc-700 focus:border-green-500'
-              }`}
-            >
-              <option value="">
-                Selecione uma categoria
-              </option>
-
-              {allClasses.map((soundClass) => (
-                <option
-                  key={soundClass.class_name}
-                  value={soundClass.class_name}
-                >
-                  {soundClass.class_name}
-                </option>
-              ))}
-            </select>
-
-            <input
-              type="text"
-              value={selectedColorName}
-              onChange={(event) => setSelectedColorName(event.target.value)}
-              placeholder="Nome da cor"
-              className={`w-full rounded-xl p-3 text-white outline-none transition-all ${
-                !selectedColorName.trim()
-                  ? 'bg-zinc-900 border border-red-500'
-                  : 'bg-zinc-900 border border-zinc-700 focus:border-green-500'
-              }`}
-            />
-
-            <div className="flex items-center gap-4">
-              <input
-                type="color"
-                value={selectedColor}
-                onChange={(event) => setSelectedColor(event.target.value)}
-                className="w-16 h-16 bg-transparent border-none cursor-pointer"
-              />
-
+          <div className="card-premium p-8">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-white font-medium">
-                  Cor da lâmpada
+                <h2 className="text-heading-sm text-casacor-black">
+                  Token LIFX
+                </h2>
+                <p className="font-light text-body-sm text-casacor-gray-medium mt-1">
+                  {loadingLifxStatus
+                    ? 'Verificando...'
+                    : hasLifxToken
+                      ? 'Token configurado e criptografado'
+                      : 'Nenhum token configurado'}
                 </p>
+              </div>
+              <button
+                onClick={() => setIsLifxModalOpen(true)}
+                className="btn-outline text-caption !px-5 !py-2 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+              >
+                {hasLifxToken ? 'Atualizar' : 'Configurar'}
+              </button>
+            </div>
+          </div>
 
-                <p className="text-zinc-400 text-sm">
-                  Escolha a cor que será ativada quando essa classe for detectada
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-heading-sm text-casacor-black">
+                  Classes configuradas
+                </h2>
+                <p className="text-body-sm text-casacor-gray-medium mt-1">
+                  {classes.length} classes ativas
                 </p>
               </div>
             </div>
 
-            <button
-              onClick={handleCreateClass}
-              disabled={creating || isFormInvalid}
-              className={`w-full py-3 rounded-2xl font-semibold transition-all ${
-                creating || isFormInvalid
-                  ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
-                  : 'bg-green-600 hover:bg-green-500 text-white'
-              }`}
-            >
-              {creating
-                ? 'Adicionando...'
-                : 'Adicionar nova classe'}
-            </button>
+            <div className="space-y-3">
+              {loading ? (
+                <div className="card-premium p-6">
+                  <p className="text-body-sm text-casacor-gray-medium">
+                    Carregando classes...
+                  </p>
+                </div>
+              ) : classes.length === 0 ? (
+                <div className="card-premium p-6">
+                  <p className="text-body-sm text-casacor-gray-medium">
+                    Nenhuma classe configurada
+                  </p>
+                </div>
+              ) : (
+                classes.map((soundClass) => (
+                  <button
+                    key={soundClass.class_name}
+                    onClick={() => handleOpenModal(soundClass)}
+                    className="card-premium w-full text-left p-5 flex items-center justify-between transition-all duration-200 hover:border-casacor-gold hover:shadow-sm hover:-translate-y-0.5 cursor-pointer"
+                  >
+                    <div>
+                      <h3 className="text-body-lg text-casacor-black font-medium">
+                        {soundClass.class_name}
+                      </h3>
+                      <p className="text-body-sm text-casacor-gray-medium mt-0.5">
+                        {soundClass.color_name}
+                      </p>
+                    </div>
+
+                    <div
+                      className="w-8 h-8 rounded-full border border-casacor-line"
+                      style={{
+                        backgroundColor: soundClass.color_hex,
+                      }}
+                    />
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+
+        </div>
+
+        <div className="lg:col-span-2">
+          <div className="card-premium p-8">
+            <h2 className="text-heading-sm text-casacor-black mb-1">
+              Adicionar classe
+            </h2>
+            <p className="font-lighttext-body-sm text-casacor-gray-medium mb-6">
+              Vincule um som a uma cor
+            </p>
+
+            <div className="space-y-5">
+              <select
+                value={selectedClass}
+                onChange={(event) => setSelectedClass(event.target.value)}
+                className="input-line"
+              >
+                <option value="">
+                  Selecione uma categoria
+                </option>
+
+                {allClasses.map((soundClass) => (
+                  <option
+                    key={soundClass.class_name}
+                    value={soundClass.class_name}
+                  >
+                    {soundClass.class_name}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                type="text"
+                value={selectedColorName}
+                onChange={(event) => setSelectedColorName(event.target.value)}
+                placeholder="Nome da cor"
+                className="input-line"
+              />
+
+              <div className="flex items-center gap-4 pt-2">
+                <input
+                  type="color"
+                  value={selectedColor}
+                  onChange={(event) => setSelectedColor(event.target.value)}
+                  className="w-10 h-10 bg-transparent border-none cursor-pointer p-0"
+                />
+                <div>
+                  <p className="text-body-sm text-casacor-black font-medium">
+                    Cor da lâmpada
+                  </p>
+                  <p className="text-caption text-casacor-gray-medium">
+                    Escolha a cor para esta classe
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={handleCreateClass}
+                disabled={creating || isFormInvalid}
+                className={`btn-primary w-full mt-4 transition-all duration-200 ${
+                  creating || isFormInvalid
+                    ? 'opacity-40 cursor-not-allowed'
+                    : 'hover:scale-[1.01] active:scale-[0.99]'
+                }`}
+              >
+                {creating ? 'Adicionando...' : 'Adicionar'}
+              </button>
+            </div>
           </div>
         </div>
+
       </div>
 
-      {/* modal responsável por atualizar ou deletar uma classe existente */}
       {isModalOpen && editingClass && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-6 z-50">
-          <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-2xl">
-            <h2 className="text-2xl font-bold text-white mb-2">
-              Editar classe
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+          <div className="card-premium-solid w-full max-w-md p-8">
+            <h2 className="text-heading-sm text-casacor-black mb-1">
+              Editar Classe
             </h2>
-
-            <p className="text-zinc-400 mb-6">
+            <p className="text-body-sm text-casacor-gray-medium mb-6">
               {editingClass.class_name}
             </p>
 
-            <div className="flex flex-col gap-4">
+            <div className="space-y-5">
               <input
                 type="text"
                 value={editColorName}
                 onChange={(event) => setEditColorName(event.target.value)}
                 placeholder="Nome da cor"
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-white outline-none focus:border-green-500"
+                className="input-line"
               />
 
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 pt-2">
                 <input
                   type="color"
                   value={editColor}
                   onChange={(event) => setEditColor(event.target.value)}
-                  className="w-16 h-16 bg-transparent border-none cursor-pointer"
+                  className="w-10 h-10 bg-transparent border-none cursor-pointer p-0"
                 />
-
                 <div>
-                  <p className="text-white font-medium">
+                  <p className="text-body-sm text-casacor-black font-medium">
                     Cor da lâmpada
                   </p>
-
-                  <p className="text-zinc-400 text-sm">
+                  <p className="text-caption text-casacor-gray-medium">
                     Atualize a cor vinculada à classe
                   </p>
                 </div>
               </div>
 
-              <div className="flex gap-3 mt-4">
+              <div className="divider-line my-2" />
+
+              <div className="flex gap-3">
                 <button
                   onClick={handleUpdateClass}
                   disabled={updating}
-                  className={`flex-1 py-3 rounded-2xl font-semibold transition-all ${
-                    updating
-                      ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
-                      : 'bg-green-600 hover:bg-green-500 text-white'
-                  }`}
+                  className={`btn-primary flex-1 transition-all duration-200 ${updating ? 'opacity-40 cursor-not-allowed' : 'hover:scale-[1.02] active:scale-[0.98]'}`}
                 >
-                  {updating
-                    ? 'Salvando...'
-                    : 'Salvar'}
+                  {updating ? 'Salvando...' : 'Salvar'}
                 </button>
 
                 <button
                   onClick={handleDeleteClass}
                   disabled={deleting}
-                  className={`flex-1 py-3 rounded-2xl font-semibold transition-all ${
-                    deleting
-                      ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
-                      : 'bg-red-600 hover:bg-red-500 text-white'
-                  }`}
+                  className="btn-outline flex-1 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
                 >
-                  {deleting
-                    ? 'Removendo...'
-                    : 'Desativar'}
+                  {deleting ? 'Removendo...' : 'Desativar'}
                 </button>
               </div>
 
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="w-full py-3 rounded-2xl font-semibold bg-zinc-800 hover:bg-zinc-700 text-white transition-all"
+                className="text-caption text-casacor-gray-medium uppercase tracking-widest w-full py-3 bg-transparent border border-casacor-line transition-all duration-200 hover:text-casacor-black hover:border-casacor-black hover:scale-[1.01] active:scale-[0.99]"
               >
                 Fechar
               </button>

@@ -47,7 +47,6 @@ export async function convertWebMToWAV(chunks: Blob[]): Promise<Blob> {
   }
   
   let offset = 44
-  const amp = Math.pow(2, bitDepth - 1) - 1
   for (let i = 0; i < frameLength; i++) {
     for (let channel = 0; channel < numberOfChannels; channel++) {
       let s = Math.max(-1, Math.min(1, channels[channel][i]))

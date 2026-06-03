@@ -40,14 +40,14 @@ api.interceptors.response.use(
       }
       try { // tenta renovar o token de acesso
         const res = await axios.post("http://localhost:8000/auth/refresh", {
-          refreshToken,
+          refresh_token: refreshToken,
         });
 
-        const { accessToken, refreshToken: newRefreshToken } = res.data; // pega o novo token de acesso
+        const { access_token, refresh_token: newRefreshToken } = res.data; // pega o novo token de acesso
         const { setToken, setRefreshToken } = await import("@/lib/cookies"); // importa funções do cookies
-        setToken(accessToken); // seta o token
+        setToken(access_token); // seta o token
         if (newRefreshToken) setRefreshToken(newRefreshToken); // se tiver um refreshtoken, seta ele também
-        originalRequest.headers.Authorization = `Bearer ${accessToken}`; // atualiza a header
+        originalRequest.headers.Authorization = `Bearer ${access_token}`; // atualiza a header
         return api(originalRequest); // reenvia a mesma requisição que falhou, mas agora com o token válido
       } catch {
         removeToken(); // se o refresh falhou, só limpa tudo e manda pro login

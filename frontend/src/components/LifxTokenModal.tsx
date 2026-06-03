@@ -43,7 +43,7 @@ function LifxTokenModal({ isOpen, onClose, onTokenSaved, existingToken = false }
     <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center p-6 z-50">
       <div className="card-premium-solid w-full max-w-md p-8">
         <h2 className="text-heading-sm text-casacor-black mb-1">
-          {existingToken ? 'Atualizar Token LIFX' : 'Configurar Token LIFX'}
+          {existingToken ? 'Atualizar token LIFX' : 'Configurar Token LIFX'}
         </h2>
         <p className="text-body-sm text-casacor-gray-medium mb-6">
           {existingToken

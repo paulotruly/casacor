@@ -333,7 +333,7 @@ function Config() {
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center p-6 z-50">
           <div className="card-premium-solid w-full max-w-md p-8">
             <h2 className="text-heading-sm text-casacor-black mb-1">
-              Editar Classe
+              Editar classe
             </h2>
             <p className="text-body-sm text-casacor-gray-medium mb-6">
               {editingClass.class_name}

@@ -37,13 +37,9 @@ export async function getMe(): Promise<UserResponse> {
 // essa função recebe o áudio como Blob, envia pra API como FormData e recebe a classificação de volta
 export async function classifyAudio(input: ClassifyAudioInput): Promise<ClassifyAudioResponse> {
   const formData = new FormData();
-  formData.append("audio", input.audio, "audio.wav");
+  formData.append('audio', input.audio, 'audio.wav');
   
-  const response = await api.post<ClassifyAudioResponse>("/classify", formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
+  const response = await api.post<ClassifyAudioResponse>("/classify", formData);
   return response.data;
 }
 

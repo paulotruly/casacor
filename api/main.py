@@ -8,6 +8,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from sympy import content
 
 from models import (
     LoginResponse, UserCreate, UserLogin, Token, TokenRefresh,
@@ -134,7 +135,6 @@ def refresh_token(token_data: TokenRefresh):
 # ============================================================
 # ROTAS DE CLASSIFICAÇÃO DE ÁUDIO
 # ============================================================
-
 @app.post("/classify", response_model=ClassifyResponse)
 async def classify_audio_endpoint(
     audio: UploadFile = File(...),
@@ -168,9 +168,9 @@ async def classify_audio_endpoint(
             detail="Arquivo muito grande (máximo 10MB)"
         )
     
-    # tentar classificar o áudio
     try:
         resultado = audio_classifier.classify_audio(content)
+
     except ValueError as e:
         # erro relacionado ao formato ou leitura do arquivo
         raise HTTPException(
@@ -182,27 +182,36 @@ async def classify_audio_endpoint(
         print(f"Erro inesperado ao classificar áudio: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro ao processar o áudio. Verifique se é um arquivo WAV válido."
+            detail="Erro ao processar o áudio. Verifique se é um arquivo de áudio válido."
         )
     
     classe_detectada = resultado["detected_class"]
     confianca = resultado["confidence"]
     classes_secundarias = resultado["secondary_classes"]
-    cor_info = color_config.get_user_color_for_class(db, user_id, classe_detectada) # obtém a cor configurada para ESSE usuário
+
+    cor_info = color_config.get_user_color_for_class(
+        db,
+        user_id,
+        classe_detectada
+    ) # obtém a cor configurada para ESSE usuário
+
     # se o usuário não tiver configurado essa classe, usa branco
     if cor_info is None:
         cor_info = {"name": "Branco", "hex": "#FFFFFF"}
+
     cor_nome = cor_info["name"]
     cor_hex = cor_info["hex"]
 
     # descriptografa o token LIFX do usuário
     token = None
+
     if user.liftx_token:
         try:
             token = decrypt_lifx_token(user.liftx_token)
         except Exception as e:
             print("Erro ao descriptografar token:", e)
             token = None
+
     # tenta mudar a cor da lâmpada se o token estiver configurado
     if token:
         try:

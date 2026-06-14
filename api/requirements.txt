@@ -21,3 +21,4 @@ pymysql
 requests
 librosa
 python-dotenv
+pydub
